@@ -62,11 +62,7 @@ export class DockgeInstanceManager {
                 ];
 
                 if (proxyEventList.includes(eventName)) {
-                    // Add the socket url in the res object to determine which socket server it is from
-                    if (args.length > 0 && typeof args[0] === "object") {
-                        args[0].instanceURL = url;
-                    }
-                    socket.emit(eventName, ...args);
+                    socket.emit(eventName, ...args, url);
                 } else {
                     log.debug("INSTANCEMANAGER", "Event not in the proxy list: " + eventName);
                 }

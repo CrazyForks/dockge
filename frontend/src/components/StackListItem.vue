@@ -1,5 +1,5 @@
 <template>
-    <router-link :to="`/compose/${stack.name}`" :class="{ 'dim' : !stack.isManagedByDockge }" class="item">
+    <router-link :to="url" :class="{ 'dim' : !stack.isManagedByDockge }" class="item">
         <Uptime :stack="stack" :fixed-width="true" class="me-2" />
         <span class="title">{{ stackName }}</span>
     </router-link>
@@ -51,6 +51,12 @@ export default {
         };
     },
     computed: {
+        url() {
+            if (!this.stack.instanceURL) {
+                return `/compose/${this.stack.name}`;
+            }
+            return `/compose/${this.stack.name}/${this.stack.instanceURL}`;
+        },
         depthMargin() {
             return {
                 marginLeft: `${31 * this.depth}px`,

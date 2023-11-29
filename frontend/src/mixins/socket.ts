@@ -28,11 +28,24 @@ export default defineComponent({
             loggedIn: false,
             allowLoginDialog: false,
             username: null,
+            instanceList: {} as Record<string, any>,
             stackList: {},
             composeTemplate: "",
         };
     },
     computed: {
+
+        completeStackList() {
+            let list : Record<string, any> = this.stackList;
+            for (let instanceURL in this.instanceList) {
+                let instance = this.instanceList[instanceURL];
+                for (let stackName in instance.stackList) {
+                    list[stackName + "_" + instanceURL] = instance.stackList[stackName];
+                }
+            }
+            return list;
+        },
+
         usernameFirstChar() {
             if (typeof this.username == "string" && this.username.length >= 1) {
                 return this.username.charAt(0).toUpperCase();
@@ -81,7 +94,6 @@ export default defineComponent({
     },
     mounted() {
         return;
-
     },
     methods: {
         /**
@@ -186,9 +198,24 @@ export default defineComponent({
                 terminal.write(data);
             });
 
-            socket.on("stackList", (res) => {
+            socket.on("stackList", (res, instanceURL) => {
                 if (res.ok) {
-                    this.stackList = res.stackList;
+                    if (!instanceURL) {
+                        this.stackList = res.stackList;
+                    } else {
+                        if (!this.instanceList[instanceURL]) {
+                            this.instanceList[instanceURL] = {
+                                stackList: {},
+                            };
+                        }
+
+                        for (let stackName in res.stackList) {
+                            const stackObj = res.stackList[stackName];
+                            stackObj.instanceURL = instanceURL;
+                        }
+
+                        this.instanceList[instanceURL].stackList = res.stackList;
+                    }
                 }
             });
 

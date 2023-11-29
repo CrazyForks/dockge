@@ -120,7 +120,7 @@ export default {
          * @returns {Array} The sorted list of stacks.
          */
         sortedStackList() {
-            let result = Object.values(this.$root.stackList);
+            let result = Object.values(this.$root.completeStackList);
 
             result = result.filter(stack => {
                 // filter by search text

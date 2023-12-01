@@ -525,6 +525,7 @@ export class DockgeServer {
                 this.io.to(room).emit("stackList", {
                     ok: true,
                     stackList: Object.fromEntries(map),
+                    endpoint: undefined,
                 });
             }
         }

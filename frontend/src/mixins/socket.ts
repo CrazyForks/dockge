@@ -37,10 +37,10 @@ export default defineComponent({
 
         completeStackList() {
             let list : Record<string, any> = this.stackList;
-            for (let instanceURL in this.instanceList) {
-                let instance = this.instanceList[instanceURL];
+            for (let endpoint in this.instanceList) {
+                let instance = this.instanceList[endpoint];
                 for (let stackName in instance.stackList) {
-                    list[stackName + "_" + instanceURL] = instance.stackList[stackName];
+                    list[stackName + "_" + endpoint] = instance.stackList[stackName];
                 }
             }
             return list;
@@ -198,23 +198,25 @@ export default defineComponent({
                 terminal.write(data);
             });
 
-            socket.on("stackList", (res, instanceURL) => {
+            socket.on("stackList", (res) => {
+                console.log(res);
                 if (res.ok) {
-                    if (!instanceURL) {
+                    if (!res.endpoint) {
                         this.stackList = res.stackList;
                     } else {
-                        if (!this.instanceList[instanceURL]) {
-                            this.instanceList[instanceURL] = {
+                        if (!this.instanceList[res.endpoint]) {
+                            this.instanceList[res.endpoint] = {
                                 stackList: {},
                             };
                         }
 
+                        // Set endpoint for each stack
                         for (let stackName in res.stackList) {
                             const stackObj = res.stackList[stackName];
-                            stackObj.instanceURL = instanceURL;
+                            stackObj.endpoint = res.endpoint;
                         }
 
-                        this.instanceList[instanceURL].stackList = res.stackList;
+                        this.instanceList[res.endpoint].stackList = res.stackList;
                     }
                 }
             });

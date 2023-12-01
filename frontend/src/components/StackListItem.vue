@@ -1,7 +1,10 @@
 <template>
     <router-link :to="url" :class="{ 'dim' : !stack.isManagedByDockge }" class="item">
         <Uptime :stack="stack" :fixed-width="true" class="me-2" />
-        <span class="title">{{ stackName }}</span>
+        <div class="title">
+            <span>{{ stackName }}</span>
+            <div v-if="stack.endpoint" class="endpoint">{{ stack.endpoint }}</div>
+        </div>
     </router-link>
 </template>
 
@@ -52,10 +55,10 @@ export default {
     },
     computed: {
         url() {
-            if (!this.stack.instanceURL) {
+            if (!this.stack.endpoint) {
                 return `/compose/${this.stack.name}`;
             }
-            return `/compose/${this.stack.name}/${this.stack.instanceURL}`;
+            return `/compose/${this.stack.name}/${this.stack.endpoint}`;
         },
         depthMargin() {
             return {
@@ -123,16 +126,36 @@ export default {
     padding-right: 2px !important;
 }
 
-// .stack-item {
-//     width: 100%;
-// }
-
-.tags {
-    margin-top: 4px;
-    padding-left: 67px;
+.item {
+    text-decoration: none;
     display: flex;
-    flex-wrap: wrap;
-    gap: 0;
+    align-items: center;
+    min-height: 52px;
+    border-radius: 10px;
+    transition: all ease-in-out 0.15s;
+    width: 100%;
+    padding: 5px 8px;
+
+    &.disabled {
+        opacity: 0.3;
+    }
+
+    &:hover {
+        background-color: $highlight-white;
+    }
+
+    &.active {
+        background-color: #cdf8f4;
+    }
+
+    .title {
+        margin-top: -4px;
+    }
+
+    .endpoint {
+        font-size: 12px;
+        color: $dark-font-color3;
+    }
 }
 
 .collapsed {

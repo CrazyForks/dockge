@@ -38,7 +38,10 @@ const routes = [
                                 path: "/compose/:stackName",
                                 name: "compose",
                                 component: Compose,
-                                props: true,
+                            },
+                            {
+                                path: "/compose/:stackName/:endpoint",
+                                component: Compose,
                             },
                             {
                                 path: "/terminal/:stackName/:serviceName/:type",

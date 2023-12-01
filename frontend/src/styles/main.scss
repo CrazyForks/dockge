@@ -490,33 +490,7 @@ optgroup {
         }
     }
 
-    .item {
-        display: flex;
-        align-items: center;
-        height: 52px;
-        text-decoration: none;
-        border-radius: 10px;
-        transition: all ease-in-out 0.15s;
-        width: 100%;
-        padding: 0 8px;
 
-        &.disabled {
-            opacity: 0.3;
-        }
-
-        &:hover {
-            background-color: $highlight-white;
-        }
-
-        &.active {
-            background-color: #cdf8f4;
-        }
-
-        .title {
-            display: inline-block;
-            margin-top: -4px;
-        }
-    }
 }
 
 .alert-success {

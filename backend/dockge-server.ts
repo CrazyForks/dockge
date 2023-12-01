@@ -156,9 +156,6 @@ export class DockgeServer {
             }
         }
 
-        // Create all the necessary directories
-        this.initDataDir();
-
         // Create express
         this.app = express();
 
@@ -275,6 +272,9 @@ export class DockgeServer {
      *
      */
     async serve() {
+        // Create all the necessary directories
+        this.initDataDir();
+
         // Connect to database
         try {
             await Database.init(this);

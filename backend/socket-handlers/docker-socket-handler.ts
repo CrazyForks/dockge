@@ -5,6 +5,7 @@ import { Stack } from "../stack";
 
 // @ts-ignore
 import composerize from "composerize";
+import { convertToLocalStackName, convertToRemoteStackID, isRemoteStackName, LooseObject } from "../util-common";
 
 export class DockerSocketHandler extends SocketHandler {
     create(socket : DockgeSocket, server : DockgeServer) {
@@ -65,14 +66,15 @@ export class DockerSocketHandler extends SocketHandler {
             }
         });
 
-        socket.on("getStack", (stackName : unknown, callback) => {
+        this.event("getStack", socket, (req : LooseObject, callback) => {
             try {
                 checkLogin(socket);
 
-                if (typeof(stackName) !== "string") {
-                    throw new ValidationError("Stack name must be a string");
+                if (typeof(req) !== "object") {
+                    throw new ValidationError("Request must be an object");
                 }
 
+                let stackName = req.stackName;
                 const stack = Stack.getStack(server, stackName);
 
                 if (stack.isManagedByDockge) {

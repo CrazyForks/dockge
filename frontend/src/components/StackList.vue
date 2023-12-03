@@ -152,6 +152,15 @@ export default {
             });
 
             result.sort((m1, m2) => {
+
+                // sort by managed by dockge
+                if (m1.isManagedByDockge && !m2.isManagedByDockge) {
+                    return -1;
+                } else if (!m1.isManagedByDockge && m2.isManagedByDockge) {
+                    return 1;
+                }
+
+                // sort by status
                 if (m1.status !== m2.status) {
                     if (m2.status === RUNNING) {
                         return 1;

@@ -190,20 +190,34 @@ export function getCryptoRandomInt(min: number, max: number):number {
     }
 }
 
-export function getComposeTerminalName(stack : string) {
-    return "compose-" + stack;
+export function getComposeTerminalName(stackID : string) {
+    return "compose-" + stackID;
 }
 
-export function getCombinedTerminalName(stack : string) {
-    return "combined-" + stack;
+export function getCombinedTerminalName(stackID : string) {
+    return "combined-" + stackID;
 }
 
 export function getContainerTerminalName(container : string) {
     return "container-" + container;
 }
 
-export function getContainerExecTerminalName(stackName : string, container : string, index : number) {
-    return "container-exec-" + stackName + "-" + container + "-" + index;
+export function getContainerExecTerminalName(stackID : string, container : string, index : number) {
+    return "containerExec-" + stackID + "-" + container + "-" + index;
+}
+
+export function addEndpointToTerminalName(terminalName : string, endpoint : string) {
+    if (
+        terminalName.startsWith("compose-") ||
+        terminalName.startsWith("combined-") ||
+        terminalName.startsWith("containerExec-")
+    ) {
+        let arr = terminalName.split("-");
+        arr[1] = convertToRemoteStackID(arr[1], endpoint);
+        return arr.join("-");
+    } else {
+        return terminalName;
+    }
 }
 
 export function copyYAMLComments(doc : Document, src : Document) {
@@ -339,4 +353,41 @@ export function parseDockerPort(input : string, defaultHostname : string = "loca
         url: protocol + "://" + hostname + ":" + portInt,
         display: display,
     };
+}
+
+const splitChar : string = "::";
+
+export function convertToRemoteStackID(stackName? : string, endpoint? : string) {
+    if (!stackName || !endpoint) {
+        return stackName;
+    }
+
+    if (stackName.startsWith("remote" + splitChar)) {
+        return stackName;
+    }
+    return `remote${splitChar}${endpoint}${splitChar}${stackName}`;
+}
+
+export function convertToLocalStackName(stackName? : string) {
+    if (!stackName) {
+        return {
+            endpoint: undefined,
+            stackName: undefined,
+        };
+    }
+
+    if (!stackName.startsWith("remote" + splitChar)) {
+        return {
+            endpoint: undefined,
+            stackName,
+        };
+    }
+    return {
+        endpoint: stackName.split(splitChar)[1],
+        stackName: stackName.split(splitChar).splice(2).join(splitChar)
+    };
+}
+
+export function isRemoteStackName(stackName : string) {
+    return stackName.startsWith("remote" + splitChar);
 }

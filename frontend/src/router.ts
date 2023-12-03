@@ -35,12 +35,8 @@ const routes = [
                                 component: Compose,
                             },
                             {
-                                path: "/compose/:stackName",
+                                path: "/compose/:stackID",
                                 name: "compose",
-                                component: Compose,
-                            },
-                            {
-                                path: "/compose/:stackName/:endpoint",
                                 component: Compose,
                             },
                             {

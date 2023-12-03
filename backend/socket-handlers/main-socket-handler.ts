@@ -260,8 +260,6 @@ export class MainSocketHandler extends SocketHandler {
                     await doubleCheckPassword(socket, currentPassword);
                 }
 
-                console.log(data);
-
                 await Settings.setSettings("general", data);
 
                 callback({

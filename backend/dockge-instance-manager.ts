@@ -1,25 +1,89 @@
 import { DockgeSocket } from "./util-server";
-import { io } from "socket.io-client";
+import { io, Socket as SocketClient } from "socket.io-client";
 import { log } from "./log";
+import { addEndpointToTerminalName, convertToRemoteStackID } from "./util-common";
 
 /**
  * Dockge Instance Manager
  */
 export class DockgeInstanceManager {
-    protected static instance: DockgeInstanceManager;
 
-    protected constructor() {
+    protected socket : DockgeSocket;
+    protected instanceSocketList : Record<string, SocketClient> = {};
+
+    constructor(socket: DockgeSocket) {
+        this.socket = socket;
     }
 
-    public static getInstance(): DockgeInstanceManager {
-        if (!DockgeInstanceManager.instance) {
-            DockgeInstanceManager.instance = new DockgeInstanceManager();
+    connect(endpoint : string, tls : boolean, username : string, password : string) {
+        if (this.instanceSocketList[endpoint]) {
+            log.debug("INSTANCEMANAGER", "Already connected to the socket server: " + endpoint);
+            return;
         }
-        return DockgeInstanceManager.instance;
+
+        let url = ((tls) ? "wss://" : "ws://") + endpoint;
+
+        log.info("INSTANCEMANAGER", "Connecting to the socket server: " + endpoint);
+        let client = io(url, {
+            transports: [ "websocket", "polling" ],
+        });
+
+        client.on("connect", () => {
+            log.info("INSTANCEMANAGER", "Connected to the socket server: " + endpoint);
+
+            client.emit("login", {
+                username: username,
+                password: password,
+            }, (res) => {
+                if (res.ok) {
+                    log.info("INSTANCEMANAGER", "Logged in to the socket server: " + endpoint);
+                } else {
+                    log.error("INSTANCEMANAGER", "Failed to login to the socket server: " + endpoint);
+                }
+            });
+        });
+
+        client.on("error", (err) => {
+            log.error("INSTANCEMANAGER", "Error from the socket server: " + endpoint);
+            log.error("INSTANCEMANAGER", err);
+        });
+
+        client.on("disconnect", () => {
+            log.info("INSTANCEMANAGER", "Disconnected from the socket server: " + endpoint);
+        });
+
+        client.on("stackList", (res) => {
+            if (res.endpoint) {
+                log.debug("INSTANCEMANAGER", "Received stackList from endpoint, ignore: " + res.endpoint);
+                return;
+            }
+
+            res.endpoint = endpoint;
+
+            let newStackList : Record<string, any> = {};
+
+            for (let stackName in res.stackList) {
+                let stack = res.stackList[stackName];
+                stack.endpoint = endpoint;
+                stack.id = convertToRemoteStackID(stack.name, endpoint);
+                newStackList[stack.name] = stack;
+            }
+            this.socket.emit("stackList", res);
+        });
+
+        client.on("terminalWrite", (terminalName, data) => {
+            this.socket.emit("terminalWrite", addEndpointToTerminalName(terminalName, endpoint), data);
+        });
+
+        this.instanceSocketList[endpoint] = client;
     }
 
-    connect(socket: DockgeSocket) {
+    disconnect(endpoint : string) {
+        let client = this.instanceSocketList[endpoint];
+        client?.disconnect();
+    }
 
+    connectAll() {
         let list : Record<string, {tls : boolean, username : string, password : string}> = {
             "louis-twister-pi:5001": {
                 tls: false,
@@ -34,67 +98,20 @@ export class DockgeInstanceManager {
 
         for (let endpoint in list) {
             let item = list[endpoint];
-
-            let url = (item.tls) ? "wss://" : "ws://";
-            url += endpoint;
-
-            log.info("INSTANCEMANAGER", "Connecting to the socket server: " + endpoint);
-            let client = io(url, {
-                transports: [ "websocket", "polling" ],
-            });
-
-            client.on("connect", () => {
-                log.info("INSTANCEMANAGER", "Connected to the socket server: " + endpoint);
-
-                client.emit("login", {
-                    username: item.username,
-                    password: item.password,
-                }, (res) => {
-                    if (res.ok) {
-                        log.info("INSTANCEMANAGER", "Logged in to the socket server: " + endpoint);
-                    } else {
-                        log.error("INSTANCEMANAGER", "Failed to login to the socket server: " + endpoint);
-                    }
-                });
-            });
-
-            client.on("error", (err) => {
-                log.error("INSTANCEMANAGER", "Error from the socket server: " + endpoint);
-                log.error("INSTANCEMANAGER", err);
-            });
-
-            client.on("disconnect", () => {
-                log.info("INSTANCEMANAGER", "Disconnected from the socket server: " + endpoint);
-            });
-
-            // Catch all events
-            client.onAny((eventName, ...args) => {
-                log.debug("INSTANCEMANAGER", "Received event: " + eventName);
-
-                let proxyEventList = [
-                    "stackList",
-                ];
-
-                if (proxyEventList.includes(eventName) &&
-                    args.length >= 1 &&
-                    typeof(args[0]) === "object" &&
-                    args[0].endpoint === undefined      // Only proxy the event from the endpoint, any upstream event will be ignored
-                ) {
-                    args[0].endpoint = endpoint;
-                    socket.emit(eventName, ...args);
-                } else {
-                    log.debug("INSTANCEMANAGER", "Event not in the proxy list or cannot set endpoint to the res: " + eventName);
-                }
-            });
-
-            socket.instanceSocketList[url] = client;
+            this.connect(endpoint, item.tls, item.username, item.password);
         }
     }
 
-    disconnect(socket: DockgeSocket) {
-        for (let url in socket.instanceSocketList) {
-            let client = socket.instanceSocketList[url];
-            client.disconnect();
+    disconnectAll() {
+        for (let endpoint in this.instanceSocketList) {
+            this.disconnect(endpoint);
         }
     }
+
+    emitToEndpoint(endpoint: string, eventName: string, ...args : unknown[]) {
+        log.debug("INSTANCEMANAGER", "Emitting event to endpoint: " + endpoint);
+        let client = this.instanceSocketList[endpoint];
+        client?.emit(eventName, ...args);
+    }
+
 }

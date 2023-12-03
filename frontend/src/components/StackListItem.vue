@@ -11,6 +11,7 @@
 <script>
 
 import Uptime from "./Uptime.vue";
+import { convertToLocalStackName } from "../../../backend/util-common";
 
 export default {
     components: {
@@ -55,10 +56,7 @@ export default {
     },
     computed: {
         url() {
-            if (!this.stack.endpoint) {
-                return `/compose/${this.stack.name}`;
-            }
-            return `/compose/${this.stack.name}/${this.stack.endpoint}`;
+            return `/compose/${this.stack.id}`;
         },
         depthMargin() {
             return {
@@ -66,7 +64,7 @@ export default {
             };
         },
         stackName() {
-            return this.stack.name;
+            return convertToLocalStackName(this.stack.name).stackName;
         }
     },
     watch: {

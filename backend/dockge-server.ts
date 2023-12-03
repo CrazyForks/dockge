@@ -68,8 +68,6 @@ export class DockgeServer {
 
     stacksDir : string = "";
 
-    dockgeInstanceManager : DockgeInstanceManager;
-
     /**
      *
      */
@@ -187,8 +185,6 @@ export class DockgeServer {
             response.send(this.indexHTML);
         });
 
-        this.dockgeInstanceManager = DockgeInstanceManager.getInstance();
-
         // Allow all CORS origins in development
         let cors = undefined;
         if (isDev) {
@@ -206,13 +202,14 @@ export class DockgeServer {
             log.info("server", "Socket connected!");
 
             let dockgeSocket = socket as DockgeSocket;
-            dockgeSocket.instanceSocketList = {};
+            dockgeSocket.isAgentMode = false;
+            dockgeSocket.instanceManager = new DockgeInstanceManager(dockgeSocket);
 
-            this.sendInfo(socket, true);
+            this.sendInfo(dockgeSocket, true);
 
             if (this.needSetup) {
                 log.info("server", "Redirect to setup page");
-                socket.emit("setup");
+                dockgeSocket.emit("setup");
             }
 
             // Create socket handlers
@@ -228,15 +225,15 @@ export class DockgeServer {
             if (await Settings.get("disableAuth")) {
                 log.info("auth", "Disabled Auth: auto login to admin");
                 this.afterLogin(dockgeSocket, await R.findOne("user") as User);
-                socket.emit("autoLogin");
+                dockgeSocket.emit("autoLogin");
             } else {
                 log.debug("auth", "need auth");
             }
 
             // Socket disconnect
-            socket.on("disconnect", () => {
+            dockgeSocket.on("disconnect", () => {
                 log.info("server", "Socket disconnected!");
-                this.dockgeInstanceManager.disconnect(dockgeSocket);
+                dockgeSocket.instanceManager.disconnectAll();
             });
 
         });
@@ -265,7 +262,7 @@ export class DockgeServer {
         }
 
         // Also connect to other dockge instances
-        this.dockgeInstanceManager.connect(socket);
+        socket.instanceManager.connectAll();
     }
 
     /**
@@ -525,7 +522,6 @@ export class DockgeServer {
                 this.io.to(room).emit("stackList", {
                     ok: true,
                     stackList: Object.fromEntries(map),
-                    endpoint: undefined,
                 });
             }
         }

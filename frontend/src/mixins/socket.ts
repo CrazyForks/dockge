@@ -199,7 +199,6 @@ export default defineComponent({
             });
 
             socket.on("stackList", (res) => {
-                console.log(res);
                 if (res.ok) {
                     if (!res.endpoint) {
                         this.stackList = res.stackList;

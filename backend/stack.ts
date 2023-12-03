@@ -21,6 +21,7 @@ import childProcess from "child_process";
 export class Stack {
 
     name: string;
+
     protected _status: number = UNKNOWN;
     protected _composeYAML?: string;
     protected _configFilePath?: string;
@@ -59,6 +60,8 @@ export class Stack {
     toSimpleJSON() : object {
         return {
             name: this.name,
+            id: this.name,
+            endpoint: undefined,
             status: this._status,
             tags: [],
             isManagedByDockge: this.isManagedByDockge,

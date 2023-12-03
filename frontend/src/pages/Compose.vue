@@ -214,7 +214,7 @@ import "vue-prism-editor/dist/prismeditor.min.css";
 import { FontAwesomeIcon } from "@fortawesome/vue-fontawesome";
 import {
     COMBINED_TERMINAL_COLS,
-    COMBINED_TERMINAL_ROWS,
+    COMBINED_TERMINAL_ROWS, convertToLocalStackName,
     copyYAMLComments,
     getCombinedTerminalName,
     getComposeTerminalName,
@@ -322,17 +322,17 @@ export default {
         },
 
         terminalName() {
-            if (!this.stack.name) {
+            if (!this.stack.id) {
                 return "";
             }
-            return getComposeTerminalName(this.stack.name);
+            return getComposeTerminalName(this.stack.id);
         },
 
         combinedTerminalName() {
-            if (!this.stack.name) {
+            if (!this.stack.id) {
                 return "";
             }
-            return getCombinedTerminalName(this.stack.name);
+            return getCombinedTerminalName(this.stack.id);
         },
 
         networks() {
@@ -371,7 +371,7 @@ export default {
 
         $route(to, from) {
             // Leave Combined Terminal
-            console.debug("leaveCombinedTerminal", from.params.stackName);
+            console.debug("leaveCombinedTerminal", from.params.stackID);
             this.$root.getSocket().emit("leaveCombinedTerminal", this.stack.name, () => {});
         }
     },
@@ -400,7 +400,10 @@ export default {
             this.yamlCodeChange();
 
         } else {
-            this.stack.name = this.$route.params.stackName;
+            this.stack.id = this.$route.params.stackID;
+            let { endpoint, stackName } = convertToLocalStackName(this.stack.id);
+            this.stack.name = stackName;
+            this.stack.endpoint = endpoint;
             this.loadStack();
         }
 
@@ -448,7 +451,11 @@ export default {
 
         loadStack() {
             this.processing = true;
-            this.$root.getSocket().emit("getStack", this.stack.name, (res) => {
+
+            this.$root.getSocket().emit("getStack", {
+                stackName: this.stack.name,
+                endpoint: this.stack.endpoint,
+            }, (res) => {
                 if (res.ok) {
                     this.stack = res.stack;
                     this.yamlCodeChange();

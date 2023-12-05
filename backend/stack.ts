@@ -6,7 +6,7 @@ import { DockgeSocket, fileExists, ValidationError } from "./util-server";
 import path from "path";
 import {
     COMBINED_TERMINAL_COLS,
-    COMBINED_TERMINAL_ROWS,
+    COMBINED_TERMINAL_ROWS, convertToRemoteStackID,
     CREATED_FILE,
     CREATED_STACK,
     EXITED, getCombinedTerminalName,
@@ -28,16 +28,17 @@ export class Stack {
     protected _configFilePath?: string;
     protected _composeFileName: string = "compose.yaml";
     protected server: DockgeServer;
-
+    protected endpoint: string | undefined;
     protected combinedTerminal? : Terminal;
 
     protected static managedStackList: Map<string, Stack> = new Map();
 
-    constructor(server : DockgeServer, name : string, composeYAML? : string, composeENV? : string, skipFSOperations = false) {
+    constructor(server : DockgeServer, name : string, composeYAML? : string, composeENV? : string, skipFSOperations = false, endpoint : string | undefined = undefined) {
         this.name = name;
         this.server = server;
         this._composeYAML = composeYAML;
         this._composeENV = composeENV;
+        this.endpoint = endpoint;
 
         if (!skipFSOperations) {
             // Check if compose file name is different from compose.yaml
@@ -49,6 +50,14 @@ export class Stack {
                 }
             }
         }
+    }
+
+    /**
+     * Get the remote stack ID
+     * If endpoint is undefined, it will return the local stack ID
+     */
+    getRemoteStackID() : string {
+        return convertToRemoteStackID(this.name, this.endpoint);
     }
 
     toJSON() : object {
@@ -63,7 +72,7 @@ export class Stack {
     toSimpleJSON() : object {
         return {
             name: this.name,
-            id: this.name,
+            id: this.getRemoteStackID(),
             endpoint: undefined,
             status: this._status,
             tags: [],
@@ -333,12 +342,12 @@ export class Stack {
         }
     }
 
-    static async getStack(server: DockgeServer, stackName: string, skipFSOperations = false) : Promise<Stack> {
+    static async getStack(server: DockgeServer, stackName: string, skipFSOperations = false, endpoint : string | undefined = undefined) : Promise<Stack> {
         let dir = path.join(server.stacksDir, stackName);
 
         if (!skipFSOperations) {
+            // Maybe it is a stack managed out of Dockge
             if (!await fileExists(dir) || !(await fsAsync.stat(dir)).isDirectory()) {
-                // Maybe it is a stack managed by docker compose directly
                 let stackList = await this.getStackList(server, true);
                 let stack = stackList.get(stackName);
 
@@ -349,16 +358,14 @@ export class Stack {
                     throw new ValidationError("Stack not found");
                 }
             }
-        } else {
-            //log.debug("getStack", "Skip FS operations");
         }
 
         let stack : Stack;
 
         if (!skipFSOperations) {
-            stack = new Stack(server, stackName);
+            stack = new Stack(server, stackName, undefined, undefined, false, endpoint);
         } else {
-            stack = new Stack(server, stackName, undefined, undefined, true);
+            stack = new Stack(server, stackName, undefined, undefined, true, endpoint);
         }
 
         stack._status = UNKNOWN;

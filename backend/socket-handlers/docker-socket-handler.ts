@@ -5,7 +5,13 @@ import { Stack } from "../stack";
 
 // @ts-ignore
 import composerize from "composerize";
-import { convertToLocalStackName, convertToRemoteStackID, isRemoteStackName, LooseObject } from "../util-common";
+import {
+    convertToLocalStackName,
+    convertToRemoteStackID,
+    isRemoteStackName, isStackRequest,
+    LooseObject,
+    StackRequest
+} from "../util-common";
 
 export class DockerSocketHandler extends SocketHandler {
     create(socket : DockgeSocket, server : DockgeServer) {
@@ -66,16 +72,20 @@ export class DockerSocketHandler extends SocketHandler {
             }
         });
 
-        socket.on("getStack", async (req : LooseObject, callback) => {
+        this.event("getStack", socket, async (req : unknown, callback) => {
+            console.log("here", req);
             try {
                 checkLogin(socket);
 
-                if (typeof(req) !== "object") {
-                    throw new ValidationError("Request must be an object");
+                if (!isStackRequest(req)) {
+                    throw new ValidationError("Invalid request");
                 }
 
                 let stackName = req.stackName;
-                const stack = await Stack.getStack(server, stackName);
+                let endpoint = req.responseAsEndpoint;
+                const stack = await Stack.getStack(server, stackName, false, endpoint);
+
+                console.log(stack.toJSON());
 
                 if (stack.isManagedByDockge) {
                     stack.joinCombinedTerminal(socket);

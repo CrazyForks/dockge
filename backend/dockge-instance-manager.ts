@@ -85,12 +85,16 @@ export class DockgeInstanceManager {
 
     connectAll() {
         let list : Record<string, {tls : boolean, username : string, password : string}> = {
-            "louis-twister-pi:5001": {
+
+        };
+
+        if (process.env.DOCKGE_TEST_REMOTE_HOST) {
+            list[process.env.DOCKGE_TEST_REMOTE_HOST] = {
                 tls: false,
                 username: "admin",
-                password: process.env.DOCKGE_PW || "",
-            }
-        };
+                password: process.env.DOCKGE_TEST_REMOTE_PW || "",
+            };
+        }
 
         if (Object.keys(list).length !== 0) {
             log.info("INSTANCEMANAGER", "Connecting to all instance socket server(s)...");
@@ -111,6 +115,10 @@ export class DockgeInstanceManager {
     emitToEndpoint(endpoint: string, eventName: string, ...args : unknown[]) {
         log.debug("INSTANCEMANAGER", "Emitting event to endpoint: " + endpoint);
         let client = this.instanceSocketList[endpoint];
+        if (!client) {
+            log.error("INSTANCEMANAGER", "Socket client not found for endpoint: " + endpoint);
+            return;
+        }
         client?.emit(eventName, ...args);
     }
 

@@ -12,9 +12,14 @@ dayjs.extend(utc);
 dayjs.extend(timezone);
 dayjs.extend(relativeTime);
 
-export interface LooseObject {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    [key: string]: any
+export interface StackRequest {
+    stackName : string;
+    endpoint? : string;
+    responseAsEndpoint? : string;
+}
+
+export function isStackRequest(obj : unknown) : obj is StackRequest {
+    return (obj as StackRequest).stackName !== undefined;
 }
 
 let randomBytes : (numBytes: number) => Uint8Array;
@@ -355,17 +360,20 @@ export function parseDockerPort(input : string, defaultHostname : string = "loca
     };
 }
 
+const remote = "remote";
 const splitChar : string = "::";
 
-export function convertToRemoteStackID(stackName? : string, endpoint? : string) {
-    if (!stackName || !endpoint) {
+export function convertToRemoteStackID(stackName? : string, endpoint? : string) : string {
+    if (!stackName) {
+        return "";
+    }
+    if (!endpoint) {
         return stackName;
     }
-
-    if (stackName.startsWith("remote" + splitChar)) {
+    if (stackName.startsWith(remote + splitChar)) {
         return stackName;
     }
-    return `remote${splitChar}${endpoint}${splitChar}${stackName}`;
+    return `${remote}${splitChar}${endpoint}${splitChar}${stackName}`;
 }
 
 export function convertToLocalStackName(stackName? : string) {
@@ -376,7 +384,7 @@ export function convertToLocalStackName(stackName? : string) {
         };
     }
 
-    if (!stackName.startsWith("remote" + splitChar)) {
+    if (!stackName.startsWith(remote + splitChar)) {
         return {
             endpoint: undefined,
             stackName,
@@ -389,5 +397,5 @@ export function convertToLocalStackName(stackName? : string) {
 }
 
 export function isRemoteStackName(stackName : string) {
-    return stackName.startsWith("remote" + splitChar);
+    return stackName.startsWith(remote + splitChar);
 }

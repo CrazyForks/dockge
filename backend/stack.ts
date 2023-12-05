@@ -1,8 +1,8 @@
 import { DockgeServer } from "./dockge-server";
-import fs from "fs";
+import fs, { promises as fsAsync } from "fs";
 import { log } from "./log";
 import yaml from "yaml";
-import { DockgeSocket, ValidationError } from "./util-server";
+import { DockgeSocket, fileExists, ValidationError } from "./util-server";
 import path from "path";
 import {
     COMBINED_TERMINAL_COLS,
@@ -16,7 +16,7 @@ import {
     UNKNOWN
 } from "./util-common";
 import { InteractiveTerminal, Terminal } from "./terminal";
-import childProcess from "child_process";
+import childProcessAsync from "promisify-child-process";
 
 export class Stack {
 
@@ -24,6 +24,7 @@ export class Stack {
 
     protected _status: number = UNKNOWN;
     protected _composeYAML?: string;
+    protected _composeENV?: string;
     protected _configFilePath?: string;
     protected _composeFileName: string = "compose.yaml";
     protected server: DockgeServer;
@@ -32,10 +33,11 @@ export class Stack {
 
     protected static managedStackList: Map<string, Stack> = new Map();
 
-    constructor(server : DockgeServer, name : string, composeYAML? : string, skipFSOperations = false) {
+    constructor(server : DockgeServer, name : string, composeYAML? : string, composeENV? : string, skipFSOperations = false) {
         this.name = name;
         this.server = server;
         this._composeYAML = composeYAML;
+        this._composeENV = composeENV;
 
         if (!skipFSOperations) {
             // Check if compose file name is different from compose.yaml
@@ -54,6 +56,7 @@ export class Stack {
         return {
             ...obj,
             composeYAML: this.composeYAML,
+            composeENV: this.composeENV,
         };
     }
 
@@ -72,11 +75,15 @@ export class Stack {
     /**
      * Get the status of the stack from `docker compose ps --format json`
      */
-    ps() : object {
-        let res = childProcess.execSync("docker compose ps --format json", {
-            cwd: this.path
+    async ps() : Promise<object> {
+        let res = await childProcessAsync.spawn("docker", [ "compose", "ps", "--format", "json" ], {
+            cwd: this.path,
+            encoding: "utf-8",
         });
-        return JSON.parse(res.toString());
+        if (!res.stdout) {
+            return {};
+        }
+        return JSON.parse(res.stdout.toString());
     }
 
     get isManagedByDockge() : boolean {
@@ -95,6 +102,15 @@ export class Stack {
 
         // Check YAML format
         yaml.parse(this.composeYAML);
+
+        let lines = this.composeENV.split("\n");
+
+        // Check if the .env is able to pass docker-compose
+        // Prevent "setenv: The parameter is incorrect"
+        // It only happens when there is one line and it doesn't contain "="
+        if (lines.length === 1 && !lines[0].includes("=") && lines[0].length > 0) {
+            throw new ValidationError("Invalid .env format");
+        }
     }
 
     get composeYAML() : string {
@@ -106,6 +122,17 @@ export class Stack {
             }
         }
         return this._composeYAML;
+    }
+
+    get composeENV() : string {
+        if (this._composeENV === undefined) {
+            try {
+                this._composeENV = fs.readFileSync(path.join(this.path, ".env"), "utf-8");
+            } catch (e) {
+                this._composeENV = "";
+            }
+        }
+        return this._composeENV;
     }
 
     get path() : string {
@@ -131,27 +158,35 @@ export class Stack {
      * Save the stack to the disk
      * @param isAdd
      */
-    save(isAdd : boolean) {
+    async save(isAdd : boolean) {
         this.validate();
 
         let dir = this.path;
 
         // Check if the name is used if isAdd
         if (isAdd) {
-            if (fs.existsSync(dir)) {
+            if (await fileExists(dir)) {
                 throw new ValidationError("Stack name already exists");
             }
 
             // Create the stack folder
-            fs.mkdirSync(dir);
+            await fsAsync.mkdir(dir);
         } else {
-            if (!fs.existsSync(dir)) {
+            if (!await fileExists(dir)) {
                 throw new ValidationError("Stack not found");
             }
         }
 
         // Write or overwrite the compose.yaml
-        fs.writeFileSync(path.join(dir, this._composeFileName), this.composeYAML);
+        await fsAsync.writeFile(path.join(dir, this._composeFileName), this.composeYAML);
+
+        const envPath = path.join(dir, ".env");
+
+        // Write or overwrite the .env
+        // If .env is not existing and the composeENV is empty, we don't need to write it
+        if (await fileExists(envPath) || this.composeENV.trim() !== "") {
+            await fsAsync.writeFile(envPath, this.composeENV);
+        }
     }
 
     async deploy(socket? : DockgeSocket) : Promise<number> {
@@ -171,7 +206,7 @@ export class Stack {
         }
 
         // Remove the stack folder
-        fs.rmSync(this.path, {
+        await fsAsync.rm(this.path, {
             recursive: true,
             force: true
         });
@@ -179,8 +214,8 @@ export class Stack {
         return exitCode;
     }
 
-    updateStatus() {
-        let statusList = Stack.getStatusList();
+    async updateStatus() {
+        let statusList = await Stack.getStatusList();
         let status = statusList.get(this.name);
 
         if (status) {
@@ -190,7 +225,7 @@ export class Stack {
         }
     }
 
-    static getStackList(server : DockgeServer, useCacheForManaged = false) : Map<string, Stack> {
+    static async getStackList(server : DockgeServer, useCacheForManaged = false) : Promise<Map<string, Stack>> {
         let stacksDir = server.stacksDir;
         let stackList : Map<string, Stack>;
 
@@ -201,16 +236,16 @@ export class Stack {
             stackList = new Map<string, Stack>();
 
             // Scan the stacks directory, and get the stack list
-            let filenameList = fs.readdirSync(stacksDir);
+            let filenameList = await fsAsync.readdir(stacksDir);
 
             for (let filename of filenameList) {
                 try {
                     // Check if it is a directory
-                    let stat = fs.statSync(path.join(stacksDir, filename));
+                    let stat = await fsAsync.stat(path.join(stacksDir, filename));
                     if (!stat.isDirectory()) {
                         continue;
                     }
-                    let stack = this.getStack(server, filename);
+                    let stack = await this.getStack(server, filename);
                     stack._status = CREATED_FILE;
                     stackList.set(filename, stack);
                 } catch (e) {
@@ -225,8 +260,15 @@ export class Stack {
         }
 
         // Get status from docker compose ls
-        let res = childProcess.execSync("docker compose ls --all --format json");
-        let composeList = JSON.parse(res.toString());
+        let res = await childProcessAsync.spawn("docker", [ "compose", "ls", "--all", "--format", "json" ], {
+            encoding: "utf-8",
+        });
+
+        if (!res.stdout) {
+            return stackList;
+        }
+
+        let composeList = JSON.parse(res.stdout.toString());
 
         for (let composeStack of composeList) {
             let stack = stackList.get(composeStack.Name);
@@ -252,11 +294,18 @@ export class Stack {
      * Get the status list, it will be used to update the status of the stacks
      * Not all status will be returned, only the stack that is deployed or created to `docker compose` will be returned
      */
-    static getStatusList() : Map<string, number> {
+    static async getStatusList() : Promise<Map<string, number>> {
         let statusList = new Map<string, number>();
 
-        let res = childProcess.execSync("docker compose ls --all --format json");
-        let composeList = JSON.parse(res.toString());
+        let res = await childProcessAsync.spawn("docker", [ "compose", "ls", "--all", "--format", "json" ], {
+            encoding: "utf-8",
+        });
+
+        if (!res.stdout) {
+            return statusList;
+        }
+
+        let composeList = JSON.parse(res.stdout.toString());
 
         for (let composeStack of composeList) {
             statusList.set(composeStack.Name, this.statusConvert(composeStack.Status));
@@ -284,13 +333,13 @@ export class Stack {
         }
     }
 
-    static getStack(server: DockgeServer, stackName: string, skipFSOperations = false) : Stack {
+    static async getStack(server: DockgeServer, stackName: string, skipFSOperations = false) : Promise<Stack> {
         let dir = path.join(server.stacksDir, stackName);
 
         if (!skipFSOperations) {
-            if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) {
+            if (!await fileExists(dir) || !(await fsAsync.stat(dir)).isDirectory()) {
                 // Maybe it is a stack managed by docker compose directly
-                let stackList = this.getStackList(server, true);
+                let stackList = await this.getStackList(server, true);
                 let stack = stackList.get(stackName);
 
                 if (stack) {
@@ -309,7 +358,7 @@ export class Stack {
         if (!skipFSOperations) {
             stack = new Stack(server, stackName);
         } else {
-            stack = new Stack(server, stackName, undefined, true);
+            stack = new Stack(server, stackName, undefined, undefined, true);
         }
 
         stack._status = UNKNOWN;
@@ -361,7 +410,7 @@ export class Stack {
         }
 
         // If the stack is not running, we don't need to restart it
-        this.updateStatus();
+        await this.updateStatus();
         log.debug("update", "Status: " + this.status);
         if (this.status !== RUNNING) {
             return exitCode;
@@ -409,24 +458,35 @@ export class Stack {
     async getServiceStatusList() {
         let statusList = new Map<string, number>();
 
-        let res = childProcess.spawnSync("docker", [ "compose", "ps", "--format", "json" ], {
-            cwd: this.path,
-        });
+        try {
+            let res = await childProcessAsync.spawn("docker", [ "compose", "ps", "--format", "json" ], {
+                cwd: this.path,
+                encoding: "utf-8",
+            });
 
-        let lines = res.stdout.toString().split("\n");
-
-        for (let line of lines) {
-            try {
-                let obj = JSON.parse(line);
-                if (obj.Health === "") {
-                    statusList.set(obj.Service, obj.State);
-                } else {
-                    statusList.set(obj.Service, obj.Health);
-                }
-            } catch (e) {
+            if (!res.stdout) {
+                return statusList;
             }
+
+            let lines = res.stdout?.toString().split("\n");
+
+            for (let line of lines) {
+                try {
+                    let obj = JSON.parse(line);
+                    if (obj.Health === "") {
+                        statusList.set(obj.Service, obj.State);
+                    } else {
+                        statusList.set(obj.Service, obj.Health);
+                    }
+                } catch (e) {
+                }
+            }
+
+            return statusList;
+        } catch (e) {
+            log.error("getServiceStatusList", e);
+            return statusList;
         }
 
-        return statusList;
     }
 }

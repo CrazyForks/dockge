@@ -19,10 +19,14 @@ const languageList = {
     "ru": "Русский",
     "cs-CZ": "Čeština",
     "ar": "العربية",
-    "th":"ไทย",
-    "it-IT":"Italiano",
-    "sv-SE":"Svenska",
-    "uk-UA":"Українська"
+    "th": "ไทย",
+    "it-IT": "Italiano",
+    "sv-SE": "Svenska",
+    "uk-UA": "Українська",
+    "da": "Dansk",
+    "ja": "日本語",
+    "nl": "Nederlands",
+    "ro": "Română",
 };
 
 let messages = {
@@ -35,7 +39,7 @@ for (let lang in languageList) {
     };
 }
 
-const rtlLangs = [ "fa", "ar-SY", "ur" ];
+const rtlLangs = [ "fa", "ar-SY", "ur", "ar" ];
 
 export const currentLocale = () => localStorage.locale
     || languageList[navigator.language] && navigator.language
